@@ -1,42 +1,64 @@
 import streamlit as st
 import cv2
-from PIL import Image
+from cvzone.HandTrackingModule import HandDetector
 import numpy as np
+import math
+import time
 
 def main():
-    st.title("Hand Sign Detection Web App")
-    
-    # Create placeholders for displaying the camera feed and recognized text
-    camera_placeholder = st.empty()
-    text_placeholder = st.empty()
+    cap = cv2.VideoCapture(0)
+    detector = HandDetector(maxHands=1)
+    offset = 20
+    imgSize = 300
+    folder = "Data/C"
+    counter = 0
 
-    # OpenCV video capture from default camera
-    video_capture = cv2.VideoCapture(0)
-
-    # Load your hand sign detection model here
-    # model = load_model()
+    st.title("Hand Image Capture with Streamlit")
 
     while True:
-        # Capture frame-by-frame
-        ret, frame = video_capture.read()
+        success, img = cap.read()
+        hands, img = detector.findHands(img)
+        if hands:
+            hand = hands[0]
+            x, y, w, h = hand['bbox']
+            imgWhite = np.ones((imgSize, imgSize, 3), np.uint8) * 255
+            imgCrop = img[y - offset:y + h + offset, x - offset:x + w + offset]
+            imgCropShape = imgCrop.shape
+            aspectRatio = h / w
+            if aspectRatio > 1:
+                k = imgSize / h
+                wCal = math.ceil(k * w)
+                imgResize = cv2.resize(imgCrop, (wCal, imgSize))
+                imgResizeShape = imgResize.shape
+                wGap = math.ceil((imgSize - wCal) / 2)
+                imgWhite[:, wGap:wCal + wGap] = imgResize
+            else:
+                k = imgSize / w
+                hCal = math.ceil(k * h)
+                imgResize = cv2.resize(imgCrop, (imgSize, hCal))
+                imgResizeShape = imgResize.shape
+                hGap = math.ceil((imgSize - hCal) / 2)
+                imgWhite[hGap:hCal + hGap, :] = imgResize
 
-        # Display the frame in Streamlit
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        camera_placeholder.image(frame, channels="RGB")
+            st.image(imgCrop, caption="Hand Cropped Image", channels="BGR")
+            st.image(imgWhite, caption="Hand Resized Image", channels="BGR")
 
-        # Perform hand sign detection
-        # predictions = detect_hand_sign(frame)
+        st.image(img, caption="Original Image", channels="BGR")
 
-        # Update the recognized text in Streamlit
-        # text_placeholder.write("Detected Hand Signs: {}".format(predictions))
+        if st.button("Capture Image (Press 's')"):
+            counter += 1
+            image_path = f'{folder}/Image_{time.time()}.jpg'
+            cv2.imwrite(image_path, imgWhite)
+            st.success(f"Image captured and saved as {image_path}")
+            st.write(f"Total Images Captured: {counter}")
 
-        # Stop the loop if the user clicks the "Stop" button
-        if st.button("Stop"):
-            break
-
-    # Release the video capture object and close the Streamlit app
-    video_capture.release()
-    st.stop()
+        key = cv2.waitKey(1)
+        if key == ord("s"):
+            counter += 1
+            image_path = f'{folder}/Image_{time.time()}.jpg'
+            cv2.imwrite(image_path, imgWhite)
+            st.success(f"Image captured and saved as {image_path}")
+            st.write(f"Total Images Captured: {counter}")
 
 if __name__ == "__main__":
     main()
